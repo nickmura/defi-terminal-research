@@ -54,9 +54,11 @@ you end up exactly where you started — in $P$.
 | $\pi(m)$ | `cd ../` | Return to the global base (protocol list) |
 
 Thus:
+
 $$
 \pi(\sigma(P)) = P
 $$
+
 behaves like:
 ```bash
 cd uniswap-v4/
