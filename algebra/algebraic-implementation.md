@@ -116,7 +116,10 @@ export const ρ_f = (input: string, protocol?: string): Command | null => {
 }
 ```
 
-- $$ \rho_f(u, P) = \arg\min_{g \in G_P} d(u, g) $$
+$$
+\rho_f(u, P) = \arg\min_{g \in G_P} d(u, g)
+$$
+
 - Fuzzy resolver — deterministic, non-learning.
 - Searches within:
   - \( G_P \) if protocol context is active
