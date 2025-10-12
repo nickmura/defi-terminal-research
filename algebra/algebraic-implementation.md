@@ -22,7 +22,9 @@ All executable commands live in one monoid object:
 type Command = {
   id: string
   protocol?: string
+  // and so forth...
   run: (args: any) => Promise<any>
+
 }
 
 export const GlobalMonoid: Record<string, Command> = {}
