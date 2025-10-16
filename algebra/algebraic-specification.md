@@ -107,4 +107,4 @@ Identity (neutral) element of the monoid — represents a *default state* or “
 
 ---
 
-### I
+### 
