@@ -64,7 +64,7 @@ Product space of global elements and protocols (for group actions, compositions)
 ### 5. Transformation Operator
 
 $$
-\rho : \text{Protocols} \cup G \to T
+\rho : \text{Protocols} \cup G \to M
 $$
 
 Represents *protocol review* or evaluation morphisms.
@@ -74,7 +74,7 @@ Represents *protocol review* or evaluation morphisms.
 ### 6. Composition Operator
 
 $$
-T = \text{Protocols} \cup G \to M
+Γ = \text{Protocols} \cup G \to M
 $$
 
 and
@@ -99,10 +99,10 @@ Identity (neutral) element of the monoid — represents a *default state* or “
 
 ### Notes
 
-- \( M \) forms a **monoid** under composition.  
-- \( G \) may represent a **fibered product** of aliases over protocols.  
-- \( \sigma, \rho \) define mappings for *command execution* and *protocol review*.  
-- \( e \) provides an **identity operation** for chaining commands.
+- $M$ forms a **monoid** under composition.
+- $G$ may represent a **fibered product** of aliases over protocols.
+- $\sigma, \rho$ define mappings for *command execution* and *protocol review*.
+- $e$ provides an **identity operation** for chaining commands.
 
 ---
 
