@@ -178,13 +178,35 @@ For each protocol **P**, the fiber **M_P** is defined as:
 
 Where **π** is the projection operator (see below).
 
-### Submonoid Property
+### Submonoid Properties
 
-Each fiber **M_P** must be a **submonoid** of **M**:
+Each fiber **M_P** is a **proper submonoid** of **M** with the following properties:
 
 1. **Closure**: If **f, g ∈ M_P**, then **f ∘ g ∈ M_P**
-2. **Identity**: **e ∈ M_P** (identity is shared across all fibers)
+2. **Identity**: **e_P ∈ M_P** (protocol-specific identity element)
 3. **Associativity**: Inherited from **M**
+
+### Protocol-Specific Identity
+
+**Key Insight:** Each protocol needs its own identity element to maintain proper submonoid structure:
+
+- **Identity element e_P** exists within each fiber **M_P**
+- **e_P** has scope **G_p** and protocol tag **P**
+- For any **f ∈ M_P**: **e_P ∘ f = f** and **f ∘ e_P = f** (monoid laws hold)
+- Fibers **M_P** are closed under composition AND contain their own identity
+
+**Why Protocol-Specific Identity:**
+1. **State Preservation**: Protocols maintain state in `ExecutionContext.protocolState`. Identity should preserve this.
+2. **Protocol Session**: Composing within a protocol should stay in that protocol's "session"
+3. **Type Safety**: If `f: 1inch:TokenA → 1inch:TokenB`, then identity should be `1inch:TokenB → 1inch:TokenB`
+4. **Symmetry**: Protocols share primitives (swap, lend) but implement them differently. Identity follows the same pattern.
+5. **True Submonoids**: Each M_P is mathematically a proper submonoid, not just a semigroup
+
+**Implementation:**
+- `createProtocolFiber()` automatically adds protocol-specific identity (monoid.ts:142-154)
+- Each fiber's identity has `scope: 'G_p'` and `protocol: P`
+- Composition with protocol identity stays within the fiber
+- Global identity (`scope: 'G_core'`) exists for cross-protocol operations
 
 ### Implementation Guarantee
 
@@ -206,18 +228,30 @@ if (f.scope === 'G_p' && g.scope === 'G_p' && f.protocol === g.protocol) {
 ### Fiber Creation
 
 ```typescript
-// src/core/monoid.ts:99
+// src/core/monoid.ts:128
 export function createProtocolFiber(
   id: ProtocolId,
   name: string,
   description?: string
 ): ProtocolFiber {
-  return {
+  const fiber = {
     id,
     name,
     description,
     commands: new Map()
   }
+
+  // Automatically add protocol-specific identity
+  const protocolIdentity: Command = {
+    id: 'identity',
+    scope: 'G_p',
+    protocol: id,
+    description: `Identity operation for ${name}`,
+    run: async <T>(args: T) => ({ success: true, value: args })
+  }
+
+  fiber.commands.set('identity', protocolIdentity)
+  return fiber
 }
 ```
 
@@ -463,15 +497,26 @@ const composed = composeCommands(f, g)
 
 **For each fiber M_P:**
 
-1. **π(σ(P)) = P** (section law - not fully implemented)
+1. **π(σ(P)) = P** (section law - enforced in plugin loader)
 2. **σ(π(m)) = M_P** for all **m ∈ M_P**
-3. **e ∈ M_P** (shared identity)
+3. **Ambient identity**: **e ∈ G_core** and **e ∘ f = f**, **f ∘ e = f** for all **f ∈ M_P**
+4. **Closure**: **f, g ∈ M_P ⇒ f ∘ g ∈ M_P**
 
 **Plugin registration invariant (2025-10-16):**
 
 ```typescript
 // Enforced in plugin-loader.ts:64
 assert(fiber.id === plugin.metadata.id)
+```
+
+**Verification Methods:**
+
+```typescript
+// Verify closure property for fiber commands
+verifyFiberClosure(fiber, f, g): { valid: boolean, reason?: string }
+
+// Verify ambient identity with fiber command
+verifyAmbientIdentity(f, testInput, context): Promise<{ leftIdentity: boolean, rightIdentity: boolean }>
 ```
 
 ---
@@ -482,24 +527,26 @@ assert(fiber.id === plugin.metadata.id)
 
 | Component | Status | Location |
 |-----------|--------|----------|
-| Monoid M (identity, composition) | ✅ Complete | `src/core/monoid.ts:23,39` |
+| Monoid M (identity, composition) | ✅ Complete | `src/core/monoid.ts:45,55` |
 | Command scopes (G_core, G_alias, G_p) | ✅ Complete | `src/core/types.ts` |
-| Protocol fibers (M_P) | ✅ Complete | `src/core/monoid.ts:99` |
-| Fiber closure property | ✅ Fixed 2025-10-16 | `src/core/monoid.ts:48` |
+| Protocol fibers (M_P) as submonoids | ✅ Complete | `src/core/monoid.ts:128-157` |
+| Protocol-specific identity injection | ✅ Complete | `src/core/monoid.ts:142-154` |
+| Fiber closure property | ✅ Complete | `src/core/monoid.ts:58-61` |
 | π (projection) | ✅ Complete | `src/core/command-registry.ts:102` |
 | σ (section) | ✅ Pragmatic | `src/core/command-registry.ts:118` |
 | ρ (exact resolver) | ✅ Complete | `src/core/command-registry.ts:130` |
 | ρ_f (fuzzy resolver) | ✅ Complete | `src/core/command-registry.ts:208` |
-| Protocol-local aliases | ✅ Fixed 2025-10-16 | `src/core/command-registry.ts:138` |
-| Plugin validation | ✅ Added 2025-10-16 | `src/plugins/plugin-loader.ts:64` |
-| Monoid law verification | ✅ Enhanced 2025-10-16 | `src/core/monoid.ts:150` |
+| Protocol-local aliases | ✅ Complete | `src/core/command-registry.ts:138` |
+| Plugin validation | ✅ Complete | `src/plugins/plugin-loader.ts:64` |
+| Fiber closure verification | ✅ Added 2025-10-16 | `src/core/monoid.ts:147-196` |
+| Monoid law verification | ✅ Complete | `src/core/monoid.ts:260-301` |
 
 ### ⚠️ Pragmatic Implementation
 
 | Component | Spec | Implementation | Rationale |
 |-----------|------|---------------|-----------|
 | σ (section) | `Protocols → P(M)` | `Protocols → M_P` | Power set semantics deferred to v2.0 for workflow discovery |
-| Identity in fibers | Explicit in each M_P | Shared across all fibers | Identity is in ambient monoid M, inherited by submonoids |
+| Identity injection | Manual by plugin author | Automatic in createProtocolFiber | Prevents plugin authors from forgetting identity; ensures all fibers are proper submonoids |
 
 ### ❌ Deferred to Future Versions
 
@@ -514,6 +561,44 @@ assert(fiber.id === plugin.metadata.id)
 ---
 
 ## Recent Fixes
+
+### 2025-10-16: Protocol-Specific Identity Implementation
+
+**Problem:** Spec claimed fibers were strict submonoids requiring e ∈ M_P, but implementation had identity only in G_core.
+
+**Analysis:**
+- Identity was never added to fiber command maps
+- π(identityCommand) = undefined (since scope is G_core)
+- Violated strict submonoid definition: "e ∈ M_P for all P"
+- Composing with global identity would eject commands from their fiber
+
+**Initial Approach (Ambient Identity):**
+- Considered treating identity as "ambient" (global, shared)
+- Would make fibers "semigroups with ambient identity"
+- Seemed simpler (no duplication)
+
+**Why Ambient Identity Was Wrong:**
+- **State preservation**: Protocols maintain `protocolState` that identity must preserve
+- **Protocol sessions**: Identity should keep composition within the protocol "session"
+- **Symmetry**: If `swap` is protocol-specific, why isn't `identity`?
+- **Type safety**: `1inch:TokenA → 1inch:TokenA` needs `1inch`'s identity, not global
+- **Closure violation**: Composing with G_core identity breaks fiber membership
+
+**Correct Solution: Protocol-Specific Identity**
+- Each fiber M_P gets its own identity element e_P
+- Identity has scope G_p and protocol tag P
+- `createProtocolFiber()` automatically adds protocol identity (monoid.ts:140-154)
+- Preserves protocol state and maintains submonoid closure
+
+**Implementation:**
+- Modified `createProtocolFiber()` to inject protocol-specific identity
+- Each identity: `{ id: 'identity', scope: 'G_p', protocol: P }`
+- Global identity remains in G_core for cross-protocol operations
+- Added verification helpers for submonoid properties
+
+**Impact:** Each M_P is now a mathematically rigorous submonoid with proper closure and identity.
+
+---
 
 ### 2025-10-16: Fiber Closure Fix
 
@@ -609,6 +694,108 @@ await verifyMonoidLaws(swapCommand, testInput, context, addLiqCommand, removeLiq
 ```
 
 **Implementation:** `src/core/monoid.ts:150-191`
+
+---
+
+### 2025-10-16: Fiber Isolation Enforcement
+
+**Problem:** Command resolution allowed cross-fiber access via namespace syntax, violating mathematical isolation of submonoids.
+
+**Example violation:**
+
+```bash
+user@uniswap> 1inch:swap 1 eth usdc  # ❌ Should be blocked
+user@uniswap> swap 1 eth usdc         # ✅ Uniswap swap
+```
+
+**Why This Violates Math:**
+- Fibers M_P are **submonoids** - self-contained algebraic structures
+- Cross-fiber access breaks isolation: you're "reaching into" another submonoid
+- Composition should only happen within a fiber or with global commands
+- To switch protocols, you must exit to M_G (global monoid) first
+
+**Fixes:**
+
+**1. Exact Resolver (ρ) Isolation** (`src/core/command-registry.ts:173-184`):
+
+```typescript
+// Check for namespace syntax (protocol:command)
+const namespacedMatch = input.match(/^([^:]+):(.+)$/)
+if (namespacedMatch) {
+  const [, protocol, commandId] = namespacedMatch
+
+  // FIBER ISOLATION: Block cross-fiber access
+  if (context.executionContext.activeProtocol &&
+      protocol !== context.executionContext.activeProtocol) {
+    return undefined  // Cross-fiber access blocked
+  }
+  // ... rest of resolution ...
+}
+```
+
+**2. Fuzzy Resolver (ρ_f) Isolation** (`src/core/command-registry.ts:270-291`):
+
+```typescript
+// Add protocol commands - respecting fiber isolation
+if (context.executionContext.activeProtocol) {
+  // Inside a fiber: only show current fiber's commands
+  const activeFiber = this.σ(context.executionContext.activeProtocol)
+  if (activeFiber) {
+    for (const [id, command] of activeFiber.commands) {
+      if (id !== 'identity') {  // Skip identity from suggestions
+        allCommands.push({ id, command, protocol: context.executionContext.activeProtocol })
+      }
+    }
+  }
+} else {
+  // In M_G: show all protocol commands
+  // ...
+}
+```
+
+**3. Fiber-Aware Help** (`src/core/commands.ts:22-64`):
+
+When in M_p, help shows:
+- Commands from current fiber
+- Essential global commands (help, exit, clear, history, wallet, whoami, balance)
+- Exit hint to return to M_G
+
+```typescript
+// Essential global commands always available
+const essentialGlobals = ['help', 'exit', 'clear', 'history', 'wallet', 'whoami', 'balance']
+```
+
+**Correct Behavior:**
+
+```bash
+# In M_G (global monoid)
+user@defi> 1inch:swap 1 eth usdc      # ✅ Can access any fiber
+user@defi> uniswap:swap 1 eth usdc    # ✅ Can access any fiber
+user@defi> use 1inch                  # ✅ Enter 1inch fiber
+
+# In M_p (1inch fiber)
+user@1inch> swap 1 eth usdc           # ✅ 1inch swap (in current fiber)
+user@1inch> 1inch:swap 1 eth usdc     # ✅ Explicit namespace to same fiber
+user@1inch> uniswap:swap 1 eth usdc   # ❌ BLOCKED - cross-fiber access
+user@1inch> help                      # ✅ Core command
+user@1inch> exit                      # ✅ Exit to M_G
+
+# Back in M_G
+user@defi> uniswap:swap 1 eth usdc    # ✅ Can access any fiber again
+```
+
+**Mathematical Justification:**
+
+Fibers M_P are **submonoids** with these properties:
+1. **Closure**: f, g ∈ M_P ⇒ f ∘ g ∈ M_P
+2. **Identity**: e_P ∈ M_P
+3. **Isolation**: M_P ∩ M_Q = ∅ for P ≠ Q (except global identity)
+
+Allowing cross-fiber access would violate isolation and create dependencies between independent submonoids. The correct pattern is:
+- **Within M_P**: Compose commands from M_P + global commands
+- **Switch protocols**: Exit to M_G, then enter new fiber
+
+**Impact:** Proper mathematical isolation of protocol fibers. Each M_P is truly independent.
 
 ---
 
