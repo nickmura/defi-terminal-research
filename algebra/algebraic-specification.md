@@ -103,6 +103,7 @@ Identity (neutral) element of the monoid — represents a *default state* or “
 - $G$ may represent a **fibered product** of aliases over protocols.
 - $\sigma, \rho$ define mappings for *command execution* and *protocol review*.
 - $e$ provides an **identity operation** for chaining commands.
+- NOTE: Deferring Γ and P integrations until multi-protocol implementations are occuring (1 week from now)
 
 ---
 
